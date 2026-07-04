@@ -131,7 +131,7 @@ export function SetupView({
   skipSetup,
 }: SetupViewProps) {
   return (
-    <AppPage className="min-h-screen">
+    <AppPage className="h-full min-h-0">
       <div className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-6">
           <div>
