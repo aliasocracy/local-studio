@@ -807,7 +807,7 @@ describe("controller route contracts", () => {
   }, 30_000);
 
   test("managed runtime install helpers stay inside controller data dir", async () => {
-    const { managedPackageSpec, managedVenvPath } = await import(
+    const { managedPackageSpec, managedVenvPath, shouldUseDefaultRuntimeTarget } = await import(
       "../../../controller/src/modules/engines/runtimes/engine-jobs"
     );
     const { getSglangRuntimePython } = await import(
@@ -829,6 +829,11 @@ describe("controller route contracts", () => {
     expect(managedPackageSpec("vllm", "0.10.2")).toBe("vllm==0.10.2");
     expect(managedPackageSpec("sglang")).toBe("sglang[all]");
     expect(managedPackageSpec("mlx")).toBe("mlx-lm");
+    expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "install" })).toBe(false);
+    expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "update" })).toBe(true);
+    expect(
+      shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "update", targetId: "selected" }),
+    ).toBe(false);
     expect(
       getSglangRuntimePython(
         { sglang_python: join(tempDir, "fallback-python") } as Parameters<

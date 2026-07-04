@@ -50,6 +50,10 @@ const nowIso = (): string => new Date().toISOString();
 const isPlatformBackend = (backend: RuntimeJobBackend): backend is "cuda" | "rocm" =>
   backend === "cuda" || backend === "rocm";
 
+export const shouldUseDefaultRuntimeTarget = (
+  options: Pick<CreateEngineJobOptions, "backend" | "type" | "targetId">,
+): boolean => options.backend === "vllm" && options.type !== "install" && !options.targetId;
+
 const createJobRecord = (options: CreateEngineJobOptions): EngineJob => ({
   id: randomUUID(),
   backend: isPlatformBackend(options.backend) ? "vllm" : options.backend,
@@ -169,7 +173,7 @@ const runJob = async (
         throw new Error(target.health.message ?? "Update is unsupported for this target.");
       }
     }
-    if (!target && options.backend === "vllm") {
+    if (!target && shouldUseDefaultRuntimeTarget(options)) {
       target = await getDefaultRuntimeTarget(config, "vllm", options.runningProcess);
     }
 
