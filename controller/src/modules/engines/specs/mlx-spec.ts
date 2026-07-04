@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import type { Config } from "../../../config/env";
+import { resolveBinary } from "../../../core/command";
 import type { ProcessInfo, Recipe } from "../../models/types";
 import type {
   RuntimeBackendInfo,
@@ -10,7 +11,11 @@ import { stripForeignFlagKeys } from "@local-studio/contracts/engine-args";
 import { extractFlag, hasModuleInvocation } from "../argument-utilities";
 import type { EngineSpec, InstallOptions } from "../engine-spec";
 import { installIntoManagedVenv, managedVenvPython } from "../runtimes/managed-venv";
-import { probeBackendRuntime, probeRunningProcessPython } from "../runtimes/runtime-target-probes";
+import {
+  normalizePackageSpec,
+  probeBackendRuntime,
+  probeRunningProcessPython,
+} from "../runtimes/runtime-target-probes";
 
 const buildMlxCommand = (recipe: Recipe, config: Config): string[] => {
   const managedPython = managedVenvPython(config, "mlx");
@@ -23,9 +28,13 @@ const buildMlxCommand = (recipe: Recipe, config: Config): string[] => {
   return appendExtraArguments(command, stripForeignFlagKeys("mlx", recipe.extra_args));
 };
 
-const managedPackageSpec = (_version?: string | null): string => {
-  return "mlx-lm";
+const managedPackageName = (): string => {
+  if (process.platform !== "linux") return "mlx-lm";
+  return resolveBinary("nvidia-smi") ? "mlx-lm[cuda12]" : "mlx-lm[cpu]";
 };
+
+const managedPackageSpec = (version?: string | null): string =>
+  normalizePackageSpec(managedPackageName(), version);
 
 const detectInvocation = (args: string[]): boolean => {
   const joined = args.join(" ");

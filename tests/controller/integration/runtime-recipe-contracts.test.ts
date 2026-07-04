@@ -810,9 +810,16 @@ describe("controller route contracts", () => {
     const { managedPackageSpec, managedVenvPath, shouldUseDefaultRuntimeTarget } = await import(
       "../../../controller/src/modules/engines/runtimes/engine-jobs"
     );
+    const { resolveBinary } = await import("../../../controller/src/core/command");
     const { getSglangRuntimePython } = await import(
       "../../../controller/src/modules/engines/runtimes/runtime-upgrade"
     );
+    const expectedMlxPackage =
+      process.platform === "linux"
+        ? resolveBinary("nvidia-smi")
+          ? "mlx-lm[cuda12]"
+          : "mlx-lm[cpu]"
+        : "mlx-lm";
     const selectedSglangPython = join(
       tempDir,
       "runtime",
@@ -828,7 +835,7 @@ describe("controller route contracts", () => {
     expect(managedPackageSpec("vllm")).toBe("vllm");
     expect(managedPackageSpec("vllm", "0.10.2")).toBe("vllm==0.10.2");
     expect(managedPackageSpec("sglang")).toBe("sglang[all]");
-    expect(managedPackageSpec("mlx")).toBe("mlx-lm");
+    expect(managedPackageSpec("mlx")).toBe(expectedMlxPackage);
     expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "install" })).toBe(false);
     expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "update" })).toBe(true);
     expect(
