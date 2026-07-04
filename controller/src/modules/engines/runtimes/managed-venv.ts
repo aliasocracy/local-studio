@@ -36,7 +36,7 @@ export interface InstallProgressUpdate {
 export interface ManagedInstallOptions {
   config: Config;
   backend: ManagedPythonBackend;
-  packageSpec: string;
+  packageSpec: string | string[];
   pythonPath?: string | null | undefined;
   createManagedVenv?: boolean | undefined;
   installTimeoutMs?: number | undefined;
@@ -53,6 +53,12 @@ const tailOutput = (value: string): string =>
   value.length > MAX_OUTPUT_TAIL_LENGTH ? value.slice(-MAX_OUTPUT_TAIL_LENGTH) : value;
 
 const timeoutMinutes = (timeoutMs: number): number => Math.round(timeoutMs / 60_000);
+
+const packageSpecs = (packageSpec: string | string[]): string[] =>
+  Array.isArray(packageSpec) ? packageSpec : [packageSpec];
+
+const packageSpecLabel = (packageSpec: string | string[]): string =>
+  packageSpecs(packageSpec).join(" ");
 
 const createVenvEffect = (
   basePython: string,
@@ -84,7 +90,7 @@ const createVenvEffect = (
 
 const resolveInstallerEffect = (
   venvPython: string,
-  packageSpec: string,
+  packageSpec: string | string[],
   options: ManagedInstallOptions,
 ): Effect.Effect<{ command: string; args: string[]; installer: string } | RuntimeUpgradeResult> =>
   Effect.gen(function* () {
@@ -99,16 +105,17 @@ const resolveInstallerEffect = (
           success: false,
           version: null,
           output: pipCheck.stdout || null,
-          error: `Neither uv nor a working pip is available to install ${packageSpec}. Install uv with: ${UV_INSTALL_HINT}`,
+          error: `Neither uv nor a working pip is available to install ${packageSpecLabel(packageSpec)}. Install uv with: ${UV_INSTALL_HINT}`,
           used_command: `${venvPython} -m pip --version`,
         };
       }
     }
     const installer = uv ? "uv" : "pip";
     const command = uv ?? venvPython;
+    const specs = packageSpecs(packageSpec);
     const args = uv
-      ? ["pip", "install", "--python", venvPython, "--upgrade", packageSpec]
-      : ["-m", "pip", "install", "--upgrade", packageSpec];
+      ? ["pip", "install", "--python", venvPython, "--upgrade", ...specs]
+      : ["-m", "pip", "install", "--upgrade", ...specs];
     return { command, args, installer };
   });
 
@@ -137,6 +144,7 @@ const installIntoManagedVenvEffect = (
     }
 
     const packageSpec = options.packageSpec;
+    const packageLabel = packageSpecLabel(packageSpec);
     const installerResult = yield* resolveInstallerEffect(targetPython, packageSpec, options);
     if ("success" in installerResult) return installerResult;
     const { command, args, installer } = installerResult;
@@ -145,7 +153,7 @@ const installIntoManagedVenvEffect = (
     let outputTail = "";
     let progress = 0.2;
     let lastUpdateAt = 0;
-    options.onProgress?.({ progress, message: `Installing ${packageSpec} with ${installer}...` });
+    options.onProgress?.({ progress, message: `Installing ${packageLabel} with ${installer}...` });
     const installTimeout = options.installTimeoutMs ?? ENGINE_INSTALL_TIMEOUT_MS;
     const install = yield* runCommandAsyncEffect(command, args, {
       timeoutMs: installTimeout,
@@ -158,7 +166,7 @@ const installIntoManagedVenvEffect = (
         progress = Math.min(0.9, progress + 0.01);
         options.onProgress?.({
           progress,
-          message: `Installing ${packageSpec} with ${installer}...`,
+          message: `Installing ${packageLabel} with ${installer}...`,
           outputTail,
         });
       },
@@ -169,8 +177,8 @@ const installIntoManagedVenvEffect = (
         version: null,
         output: install.stdout || null,
         error: install.timedOut
-          ? `Install of ${packageSpec} timed out after ${timeoutMinutes(installTimeout)} minutes. Retry the install; large torch/CUDA wheels are the usual cause.`
-          : install.stderr || `Failed to install ${packageSpec}`,
+          ? `Install of ${packageLabel} timed out after ${timeoutMinutes(installTimeout)} minutes. Retry the install; large torch/CUDA wheels are the usual cause.`
+          : install.stderr || `Failed to install ${packageLabel}`,
         used_command: usedCommand,
       };
     }

@@ -36,6 +36,11 @@ const managedPackageName = (): string => {
 const managedPackageSpec = (version?: string | null): string =>
   normalizePackageSpec(managedPackageName(), version);
 
+export const managedMlxPackageSpecs = (version?: string | null): string[] => [
+  managedPackageSpec(version),
+  "transformers==5.0.0",
+];
+
 const detectInvocation = (args: string[]): boolean => {
   const joined = args.join(" ");
   if (joined.includes("mlx_lm.server") || joined.includes("mlx-lm")) return true;
@@ -82,7 +87,7 @@ const getRuntimeInfoAsync = async (
 };
 
 const installMlx = async (options: InstallOptions): Promise<RuntimeUpgradeResult> => {
-  const packageSpec = managedPackageSpec(options.version);
+  const packageSpec = managedMlxPackageSpecs(options.version);
   const pythonPath = options.pythonPath ?? options.config.mlx_python ?? null;
   return installIntoManagedVenv({
     config: options.config,

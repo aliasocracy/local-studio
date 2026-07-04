@@ -817,6 +817,9 @@ describe("controller route contracts", () => {
     const { resolveSglangInstallPythonPath } = await import(
       "../../../controller/src/modules/engines/specs/sglang-spec"
     );
+    const { managedMlxPackageSpecs } = await import(
+      "../../../controller/src/modules/engines/specs/mlx-spec"
+    );
     const expectedMlxPackage =
       process.platform === "linux"
         ? resolveBinary("nvidia-smi")
@@ -839,6 +842,7 @@ describe("controller route contracts", () => {
     expect(managedPackageSpec("vllm", "0.10.2")).toBe("vllm==0.10.2");
     expect(managedPackageSpec("sglang")).toBe("sglang[all]");
     expect(managedPackageSpec("mlx")).toBe(expectedMlxPackage);
+    expect(managedMlxPackageSpecs()).toEqual([expectedMlxPackage, "transformers==5.0.0"]);
     expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "install" })).toBe(false);
     expect(shouldUseDefaultRuntimeTarget({ backend: "vllm", type: "update" })).toBe(true);
     expect(
