@@ -4,7 +4,7 @@ import path from "path";
 const nextConfig: NextConfig = {
   output: "standalone",
   images: { unoptimized: true },
-  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.1.77"],
   // Keep the Pi SDK out of the webpack/turbopack bundle so it loads from
   // node_modules at runtime (Node-only deps, dynamic jiti loader, etc.).
   //
