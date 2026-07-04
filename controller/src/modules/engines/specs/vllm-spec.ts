@@ -164,6 +164,7 @@ const getConfigHelp = async (_config: Config): Promise<ConfigHelpResult> => {
 export const vllmSpec: EngineSpec = {
   id: "vllm",
   healthPath: "/health",
+  readinessPath: "/v1/models",
   cliBinary: "vllm",
   buildCommand: (recipe: Recipe, config: Config) => buildVllmCommand(recipe, config),
   managedPackageSpec,

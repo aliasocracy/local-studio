@@ -470,6 +470,27 @@ describe("controller route contracts", () => {
     );
   });
 
+  test("readiness rejects a health-only service on the inference port", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        const path = new URL(request.url).pathname;
+        if (path === "/health") return new Response("OK");
+        return new Response("Not found", { status: 404 });
+      },
+    });
+    process.env.LOCAL_STUDIO_INFERENCE_PORT = String(server.port);
+    try {
+      const app = await createTestApp();
+      const response = await app.request("/wait-ready?timeout=1");
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ ready: false });
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("runtime target selection and health routes persist observable outcomes", async () => {
     const llamaBin = join(tempDir, "llama-server-test");
     writeFileSync(

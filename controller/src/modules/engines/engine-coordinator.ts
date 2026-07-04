@@ -204,7 +204,7 @@ export class EngineCoordinator {
       release();
     }
   }
-  private probeHealth(path: string): Promise<boolean> {
+  private probeEndpoint(path: string): Promise<boolean> {
     return fetchLocal(this.deps.config.inference_port, path, {
       host: this.deps.config.inference_host,
       timeoutMs: 5000,
@@ -215,6 +215,7 @@ export class EngineCoordinator {
 
   private async pollHealthy(options: {
     healthPath: string;
+    readinessPath?: string | undefined;
     timeoutMs: number;
     failure?: () => string | null;
   }): Promise<{ ready: boolean; message: string | null }> {
@@ -222,14 +223,23 @@ export class EngineCoordinator {
     while (Date.now() - start < options.timeoutMs) {
       const failed = options.failure?.();
       if (failed) return { ready: false, message: failed };
-      if (await this.probeHealth(options.healthPath)) return { ready: true, message: null };
+      const healthReady = await this.probeEndpoint(options.healthPath);
+      const apiReady =
+        healthReady && options.readinessPath
+          ? await this.probeEndpoint(options.readinessPath)
+          : healthReady;
+      if (apiReady) return { ready: true, message: null };
       await delay(2000);
     }
     return { ready: false, message: null };
   }
 
   async waitForHealthy(timeoutMs: number): Promise<boolean> {
-    const result = await this.pollHealthy({ healthPath: "/health", timeoutMs });
+    const result = await this.pollHealthy({
+      healthPath: "/health",
+      readinessPath: "/v1/models",
+      timeoutMs,
+    });
     return result.ready;
   }
 
@@ -242,6 +252,7 @@ export class EngineCoordinator {
   }): Promise<{ ready: true } | { ready: false; message: string }> {
     const result = await this.pollHealthy({
       healthPath: getEngineSpec(options.recipe.backend).healthPath,
+      readinessPath: getEngineSpec(options.recipe.backend).readinessPath,
       timeoutMs: options.timeoutMs ?? LIFECYCLE_READY_TIMEOUT_MS,
       failure: () => {
         if (options.cancel?.aborted) return "Launch cancelled";

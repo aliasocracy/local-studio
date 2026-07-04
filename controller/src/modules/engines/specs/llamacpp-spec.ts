@@ -102,6 +102,7 @@ const installLlamacpp = async (options: InstallOptions): Promise<RuntimeUpgradeR
 export const llamacppSpec: EngineSpec = {
   id: "llamacpp",
   healthPath: "/health",
+  readinessPath: "/v1/models",
   cliBinary: "llama-server",
   buildCommand: buildLlamacppCommand,
   managedPackageSpec,

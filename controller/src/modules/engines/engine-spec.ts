@@ -50,6 +50,8 @@ export interface EngineSpec {
   /** Health endpoint path appended to the inference base URL for readiness checks. */
   readonly healthPath: string;
 
+  readonly readinessPath: string;
+
   /** CLI binary name in the venv bin directory (e.g. "vllm", "sglang"). Null for engines without a CLI binary. */
   readonly cliBinary: string | null;
 

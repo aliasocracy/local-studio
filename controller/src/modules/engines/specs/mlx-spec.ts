@@ -103,6 +103,7 @@ const installMlx = async (options: InstallOptions): Promise<RuntimeUpgradeResult
 export const mlxSpec: EngineSpec = {
   id: "mlx",
   healthPath: "/v1/models",
+  readinessPath: "/v1/models",
   cliBinary: null,
   buildCommand: buildMlxCommand,
   managedPackageSpec,

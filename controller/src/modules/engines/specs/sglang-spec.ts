@@ -266,6 +266,7 @@ const installSglang = async (options: InstallOptions): Promise<RuntimeUpgradeRes
 export const sglangSpec: EngineSpec = {
   id: "sglang",
   healthPath: "/health",
+  readinessPath: "/v1/models",
   cliBinary: "sglang",
   buildCommand: buildSglangCommand,
   managedPackageSpec,
