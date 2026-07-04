@@ -814,6 +814,9 @@ describe("controller route contracts", () => {
     const { getSglangRuntimePython } = await import(
       "../../../controller/src/modules/engines/runtimes/runtime-upgrade"
     );
+    const { resolveSglangInstallPythonPath } = await import(
+      "../../../controller/src/modules/engines/specs/sglang-spec"
+    );
     const expectedMlxPackage =
       process.platform === "linux"
         ? resolveBinary("nvidia-smi")
@@ -849,6 +852,14 @@ describe("controller route contracts", () => {
         { pythonPath: selectedSglangPython },
       ),
     ).toBe(selectedSglangPython);
+    expect(
+      resolveSglangInstallPythonPath({
+        config: { sglang_python: "python3" } as Parameters<
+          typeof resolveSglangInstallPythonPath
+        >[0]["config"],
+        createManagedVenv: true,
+      }),
+    ).toBeNull();
   });
 
   test("runtime backend metadata routes expose host-shaped contracts and observability", async () => {

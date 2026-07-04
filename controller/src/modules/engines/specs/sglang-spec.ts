@@ -238,18 +238,26 @@ export const getSglangRuntimePython = (
   return options.pythonPath?.trim() || config.sglang_python || resolveVllmPythonPath() || "python3";
 };
 
+export const resolveSglangInstallPythonPath = (
+  options: Pick<InstallOptions, "config" | "pythonPath" | "createManagedVenv">,
+): string | null => {
+  if (options.pythonPath?.trim()) return options.pythonPath.trim();
+  if (options.createManagedVenv !== false) return null;
+  return getSglangRuntimePython(options.config);
+};
+
 const installSglang = async (options: InstallOptions): Promise<RuntimeUpgradeResult> => {
   const envCommand = getUpgradeCommandFromEnvironment(SGLANG_UPGRADE_ENV);
   if (envCommand) return runEnvironmentUpgradeCommand(envCommand, options.onSpawn);
 
   const packageSpec = managedPackageSpec(options.version);
-  const pythonPath = options.pythonPath ?? getSglangRuntimePython(options.config);
+  const pythonPath = resolveSglangInstallPythonPath(options);
   return installIntoManagedVenv({
     config: options.config,
     backend: "sglang",
     packageSpec,
     pythonPath,
-    createManagedVenv: !options.pythonPath,
+    createManagedVenv: options.createManagedVenv,
     onProgress: options.onProgress,
     onSpawn: options.onSpawn,
   });
