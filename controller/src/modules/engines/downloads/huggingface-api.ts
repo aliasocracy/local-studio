@@ -24,6 +24,17 @@ export type HuggingFaceModelInfo = {
   siblings?: Array<{ rfilename: string; size?: number | null }>;
 };
 
+const numericHeader = (headers: Headers, name: string): number | null => {
+  const value = Number(headers.get(name) ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : null;
+};
+
+export const huggingFaceResolveUrl = (
+  modelId: string,
+  revision: string | null | undefined,
+  path: string,
+): string => `https://huggingface.co/${modelId}/resolve/${revision ?? "main"}/${path}`;
+
 export const fetchHuggingFaceModelInfo = async (
   modelId: string,
   revision?: string | null,
@@ -73,4 +84,26 @@ export const buildHuggingFaceFileList = (
     });
   }
   return files;
+};
+
+export const fetchHuggingFaceFileSize = async (
+  modelId: string,
+  revision: string | null | undefined,
+  path: string,
+  hfToken?: string | null,
+  fetchImpl: FetchLike = fetch,
+): Promise<number | null> => {
+  const headers: Record<string, string> = {};
+  if (hfToken) {
+    headers["Authorization"] = `Bearer ${hfToken}`;
+  }
+  const response = await fetchImpl(huggingFaceResolveUrl(modelId, revision, path), {
+    method: "HEAD",
+    headers,
+  });
+  if (!response.ok) return null;
+  return (
+    numericHeader(response.headers, "x-linked-size") ??
+    numericHeader(response.headers, "content-length")
+  );
 };

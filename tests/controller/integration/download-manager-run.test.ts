@@ -41,13 +41,25 @@ const modelInfoRule = (siblings: Array<{ rfilename: string; size: number }>): Fe
   respond: () => Response.json({ sha: "abc123", siblings }),
 });
 
+const modelInfoRuleWithMissingSizes = (
+  siblings: Array<{ rfilename: string; size?: number | null }>,
+): FetchRule => ({
+  match: (url) => url.includes("/api/models/"),
+  respond: () => Response.json({ sha: "abc123", siblings }),
+});
+
 const fileRule = (path: string, content: string): FetchRule => ({
-  match: (url) => url.endsWith(`/resolve/abc123/${path}`),
+  match: (url, init) => url.endsWith(`/resolve/abc123/${path}`) && init?.method !== "HEAD",
   respond: () =>
     new Response(content, {
       status: 200,
       headers: { "content-length": String(content.length) },
     }),
+});
+
+const headSizeRule = (path: string, header: string, size: number): FetchRule => ({
+  match: (url, init) => url.endsWith(`/resolve/abc123/${path}`) && init?.method === "HEAD",
+  respond: () => new Response(null, { status: 200, headers: { [header]: String(size) } }),
 });
 
 /** Streams one chunk, then stalls until the caller's abort signal fires. */
@@ -129,6 +141,50 @@ describe("download manager real-run path via the fetch seam", () => {
       "https://huggingface.co/acme/tiny-model/resolve/abc123/config.json",
       "https://huggingface.co/acme/tiny-model/resolve/abc123/model.safetensors",
     ]);
+  });
+
+  test("resolves missing model file sizes before queueing", async () => {
+    const { fetchImpl } = createFakeFetch([
+      modelInfoRuleWithMissingSizes([
+        { rfilename: "configuration.json" },
+        { rfilename: "model.safetensors" },
+      ]),
+      headSizeRule("configuration.json", "content-length", 58),
+      headSizeRule("model.safetensors", "x-linked-size", 1024),
+      fileRule("configuration.json", "x".repeat(58)),
+      fileRule("model.safetensors", "y".repeat(1024)),
+    ]);
+    const { store, manager } = createManager(fetchImpl);
+
+    const started = await manager.start({ model_id: "acme/tiny-model" });
+    expect(started.total_bytes).toBe(1082);
+
+    await waitFor(() => store.get(started.id)?.status === "completed");
+
+    const finished = store.get(started.id)!;
+    expect(finished.downloaded_bytes).toBe(1082);
+    expect(finished.total_bytes).toBe(1082);
+  });
+
+  test("recomputes totals after a later file size becomes known", async () => {
+    const { fetchImpl } = createFakeFetch([
+      modelInfoRuleWithMissingSizes([
+        { rfilename: "configuration.json", size: 58 },
+        { rfilename: "model.safetensors" },
+      ]),
+      fileRule("configuration.json", "x".repeat(58)),
+      fileRule("model.safetensors", "y".repeat(1024)),
+    ]);
+    const { store, manager } = createManager(fetchImpl);
+
+    const started = await manager.start({ model_id: "acme/tiny-model" });
+    expect(started.total_bytes).toBe(58);
+
+    await waitFor(() => store.get(started.id)?.status === "completed");
+
+    const finished = store.get(started.id)!;
+    expect(finished.downloaded_bytes).toBe(1082);
+    expect(finished.total_bytes).toBe(1082);
   });
 
   test("a failing file request marks the download failed with the HTTP error", async () => {

@@ -17,7 +17,9 @@ import type { DownloadFileInfo, DownloadStatus, ModelDownload } from "../types";
 import type { DownloadStore } from "./download-store";
 import {
   buildHuggingFaceFileList,
+  fetchHuggingFaceFileSize,
   fetchHuggingFaceModelInfo,
+  huggingFaceResolveUrl,
   type FetchLike,
 } from "./huggingface-api";
 import { DOWNLOAD_DEFAULT_IGNORE_FILENAMES, DOWNLOAD_PROGRESS_THROTTLE_MS } from "../configs";
@@ -27,13 +29,16 @@ const sumDownloadedBytes = (files: DownloadFileInfo[]): number => {
 };
 
 const sumTotalBytes = (files: DownloadFileInfo[]): number | null => {
-  const known = files.filter((file) => typeof file.size_bytes === "number") as Array<
-    DownloadFileInfo & { size_bytes: number }
-  >;
-  if (known.length === 0) {
-    return null;
+  let total = 0;
+  let hasKnownBytes = false;
+  for (const file of files) {
+    const known = Math.max(file.size_bytes ?? 0, file.downloaded_bytes ?? 0);
+    if (known > 0) {
+      total += known;
+      hasKnownBytes = true;
+    }
   }
-  return known.reduce((total, file) => total + file.size_bytes, 0);
+  return hasKnownBytes ? total : null;
 };
 
 const sanitizePathSegments = (value: string): string[] => {
@@ -92,13 +97,17 @@ export class DownloadManager {
   private rehydrate(): void {
     const downloads = this.store.list();
     for (const download of downloads) {
+      const totalBytes = sumTotalBytes(download.files);
       if (download.status === "downloading" || download.status === "queued") {
         const updated = {
           ...download,
           status: "paused" as DownloadStatus,
           error: "Restart required",
+          total_bytes: totalBytes,
         };
         this.store.save(updated);
+      } else if (download.total_bytes !== totalBytes) {
+        this.store.save({ ...download, total_bytes: totalBytes });
       }
     }
   }
@@ -126,7 +135,13 @@ export class DownloadManager {
     const hfToken = request.hf_token ?? null;
 
     const info = await fetchHuggingFaceModelInfo(modelId, request.revision, hfToken, this.fetchImpl);
-    const files = buildHuggingFaceFileList(info, allowPatterns, ignorePatterns);
+    const revision = info.sha ?? request.revision ?? null;
+    const files = await this.resolveFileSizes(
+      modelId,
+      revision,
+      buildHuggingFaceFileList(info, allowPatterns, ignorePatterns),
+      hfToken,
+    );
     if (files.length === 0) {
       throw new Error("No downloadable files found for this model");
     }
@@ -135,7 +150,7 @@ export class DownloadManager {
     const download: ModelDownload = {
       id: randomUUID(),
       model_id: modelId,
-      revision: info.sha ?? request.revision ?? null,
+      revision,
       status: "queued",
       created_at: now,
       updated_at: now,
@@ -149,6 +164,28 @@ export class DownloadManager {
     this.store.save(download);
     void this.runDownload(download.id, hfToken);
     return download;
+  }
+
+  private async resolveFileSizes(
+    modelId: string,
+    revision: string | null,
+    files: DownloadFileInfo[],
+    hfToken: string | null,
+  ): Promise<DownloadFileInfo[]> {
+    return Promise.all(
+      files.map(async (file) => ({
+        ...file,
+        size_bytes:
+          file.size_bytes ??
+          (await fetchHuggingFaceFileSize(
+            modelId,
+            revision,
+            file.path,
+            hfToken,
+            this.fetchImpl,
+          ).catch(() => null)),
+      })),
+    );
   }
 
   /**
@@ -341,7 +378,7 @@ export class DownloadManager {
       headers["Range"] = `bytes=${existing}-`;
     }
 
-    const url = `https://huggingface.co/${download.model_id}/resolve/${download.revision ?? "main"}/${file.path}`;
+    const url = huggingFaceResolveUrl(download.model_id, download.revision, file.path);
     file.status = "downloading";
     file.downloaded_bytes = existing;
     currentDownload = this.persistFileUpdate(currentDownload, file);
@@ -429,7 +466,7 @@ export class DownloadManager {
       ...latest,
       files: updatedFiles,
       downloaded_bytes: sumDownloadedBytes(updatedFiles),
-      total_bytes: latest.total_bytes ?? sumTotalBytes(updatedFiles),
+      total_bytes: sumTotalBytes(updatedFiles),
       updated_at: toTimestamp(),
     };
     this.store.save(updated);
