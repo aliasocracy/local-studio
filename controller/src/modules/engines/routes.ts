@@ -241,19 +241,24 @@ export const registerEngineRoutes: RouteRegistrar = (app, context) => {
     const body = await parseJsonObjectBody(ctx);
     const modelId = typeof body["model_id"] === "string" ? body["model_id"] : null;
     if (!modelId) throw badRequest("model_id is required");
-    const download = await context.downloadManager.start({
-      model_id: modelId,
-      revision: typeof body["revision"] === "string" ? body["revision"] : null,
-      destination_dir: typeof body["destination_dir"] === "string" ? body["destination_dir"] : null,
-      allow_patterns: Array.isArray(body["allow_patterns"])
-        ? body["allow_patterns"].map(String)
-        : null,
-      ignore_patterns: Array.isArray(body["ignore_patterns"])
-        ? body["ignore_patterns"].map(String)
-        : null,
-      hf_token: resolveHfToken(ctx, body),
-    });
-    return ctx.json({ download });
+    try {
+      const download = await context.downloadManager.start({
+        model_id: modelId,
+        revision: typeof body["revision"] === "string" ? body["revision"] : null,
+        destination_dir:
+          typeof body["destination_dir"] === "string" ? body["destination_dir"] : null,
+        allow_patterns: Array.isArray(body["allow_patterns"])
+          ? body["allow_patterns"].map(String)
+          : null,
+        ignore_patterns: Array.isArray(body["ignore_patterns"])
+          ? body["ignore_patterns"].map(String)
+          : null,
+        hf_token: resolveHfToken(ctx, body),
+      });
+      return ctx.json({ download });
+    } catch (error) {
+      throw badRequest(error instanceof Error ? error.message : String(error));
+    }
   });
 
   app.post("/studio/downloads/:downloadId/pause", async (ctx) => {

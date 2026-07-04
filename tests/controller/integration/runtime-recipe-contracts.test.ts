@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import {
   createTestApp,
+  createTestHarness,
   readControllerFunctionCallRows,
   readControllerRequestRows,
   registerControllerTestLifecycle,
@@ -306,7 +307,7 @@ describe("controller route contracts", () => {
   });
 
   test("runtime and download validation routes persist observable outcomes", async () => {
-    const app = await createTestApp();
+    const { app, context } = await createTestHarness();
 
     const downloadsResponse = await app.request("/studio/downloads");
     const downloadsBody = await downloadsResponse.json();
@@ -326,6 +327,22 @@ describe("controller route contracts", () => {
     const invalidDownloadBody = await invalidDownloadResponse.json();
     expect(invalidDownloadResponse.status).toBe(400);
     expect(invalidDownloadBody).toEqual({ detail: "model_id is required" });
+
+    const originalStart = context.downloadManager.start.bind(context.downloadManager);
+    context.downloadManager.start = async () => {
+      throw new Error("Models directory is not writable by the controller: /models");
+    };
+    const failedDownloadResponse = await app.request("/studio/downloads", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model_id: "Qwen/Qwen3-4B" }),
+    });
+    context.downloadManager.start = originalStart;
+    const failedDownloadBody = await failedDownloadResponse.json();
+    expect(failedDownloadResponse.status).toBe(400);
+    expect(failedDownloadBody).toEqual({
+      detail: "Models directory is not writable by the controller: /models",
+    });
 
     for (const action of ["pause", "resume", "cancel"]) {
       const response = await app.request(`/studio/downloads/missing-download/${action}`, {
