@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       - name: Install dependencies
         working-directory: ./controller
         run: bun install
@@ -38,11 +38,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       # Tests run under bun (installs stay npm — see frontend/package.json).
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci --legacy-peer-deps
